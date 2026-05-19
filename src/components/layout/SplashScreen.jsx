@@ -1,57 +1,76 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../utils/currency';
 
-const { width } = Dimensions.get('window');
+const MINT   = '#62C6A0';
+const WHITE  = '#FFFFFF';
+const INK    = '#111827';
 
 export default function SplashScreenView() {
-  const barAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  // Box: scale from 0 → 1 (spring pop)
+  const boxScale   = useRef(new Animated.Value(0)).current;
+  // Arrows: opacity 0 → 1
+  const arrowOpacity = useRef(new Animated.Value(0)).current;
+  // Text: opacity 0 → 1 + translateX 20 → 0
+  const textOpacity  = useRef(new Animated.Value(0)).current;
+  const textX        = useRef(new Animated.Value(18)).current;
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.timing(fadeAnim, {
+    // 1. Box pops in
+    Animated.spring(boxScale, {
+      toValue: 1,
+      friction: 5,
+      tension: 120,
+      useNativeDriver: true,
+    }).start();
+
+    // 2. Arrows fade in after box
+    Animated.timing(arrowOpacity, {
+      toValue: 1,
+      duration: 350,
+      delay: 320,
+      useNativeDriver: true,
+    }).start();
+
+    // 3. Text slides + fades in
+    Animated.parallel([
+      Animated.timing(textOpacity, {
         toValue: 1,
-        duration: 600,
+        duration: 400,
+        delay: 480,
         useNativeDriver: true,
       }),
-      Animated.timing(barAnim, {
-        toValue: 1,
-        duration: 1800,
-        useNativeDriver: false,
+      Animated.timing(textX, {
+        toValue: 0,
+        duration: 400,
+        delay: 480,
+        useNativeDriver: true,
       }),
     ]).start();
   }, []);
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-        {/* Logo */}
-        <View style={styles.logoBox}>
-          <Ionicons name="swap-horizontal" size={40} color={COLORS.primary} />
-        </View>
+      <View style={styles.logoRow}>
 
-        <Text style={styles.brand}>SwapNaija</Text>
-        <Text style={styles.tagline}>Modernizing trade by barter</Text>
+        {/* Green rounded box */}
+        <Animated.View style={[styles.box, { transform: [{ scale: boxScale }] }]}>
+          <Animated.View style={{ opacity: arrowOpacity }}>
+            <Ionicons name="swap-horizontal" size={34} color={WHITE} />
+          </Animated.View>
+        </Animated.View>
 
-        {/* Loading bar */}
-        <View style={styles.barTrack}>
-          <Animated.View
-            style={[
-              styles.barFill,
-              {
-                width: barAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0%', '100%'],
-                }),
-              },
-            ]}
-          />
-        </View>
-      </Animated.View>
+        {/* "SwapNaija" wordmark */}
+        <Animated.Text
+          style={[
+            styles.brand,
+            { opacity: textOpacity, transform: [{ translateX: textX }] },
+          ]}
+        >
+          SwapNaija
+        </Animated.Text>
 
-      <Text style={styles.powered}>Powered by Structurezz Technologies</Text>
+      </View>
     </View>
   );
 }
@@ -59,56 +78,32 @@ export default function SplashScreenView() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.primary,
+    backgroundColor: WHITE,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
   },
-  content: { alignItems: 'center', width: '100%' },
-  logoBox: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: COLORS.white,
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  box: {
+    width: 64,
+    height: 64,
+    borderRadius: 15,
+    backgroundColor: MINT,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 10,
+    shadowColor: MINT,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
   },
   brand: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: '800',
-    color: COLORS.white,
-    marginBottom: 8,
+    color: INK,
     letterSpacing: -0.5,
-  },
-  tagline: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.85)',
-    marginBottom: 48,
-    fontWeight: '400',
-  },
-  barTrack: {
-    width: width * 0.55,
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: '100%',
-    backgroundColor: COLORS.white,
-    borderRadius: 2,
-  },
-  powered: {
-    position: 'absolute',
-    bottom: 40,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
-    fontWeight: '500',
   },
 });
