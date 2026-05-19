@@ -12,6 +12,7 @@ import {
 } from '../../src/utils/currency';
 import Avatar from '../../src/components/ui/Avatar';
 import Spinner from '../../src/components/ui/Spinner';
+import BackButton from '../../src/components/ui/BackButton';
 
 const { width: SW } = Dimensions.get('window');
 const LIMIT = 20;
@@ -230,9 +231,7 @@ export default function FreshDropsScreen() {
     <View style={s.screen}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={20} color={COLORS.text} />
-        </TouchableOpacity>
+        <BackButton fallback="/" />
         <Text style={s.headerTitle}>Fresh Drops</Text>
         <View style={{ width: 40 }} />
       </View>

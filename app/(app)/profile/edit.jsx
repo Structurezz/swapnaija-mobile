@@ -13,6 +13,7 @@ import { useAuthStore } from '../../../src/store/auth.store';
 import { COLORS } from '../../../src/utils/currency';
 import Button from '../../../src/components/ui/Button';
 import Avatar from '../../../src/components/ui/Avatar';
+import BackButton from '../../../src/components/ui/BackButton';
 
 export default function EditProfileScreen() {
   const { user, updateUser } = useAuthStore();
@@ -92,9 +93,7 @@ export default function EditProfileScreen() {
       <View style={styles.screen}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={COLORS.text} />
-          </TouchableOpacity>
+          <BackButton fallback="/profile" />
           <Text style={styles.headerTitle}>Edit Profile</Text>
           <View style={{ width: 40 }} />
         </View>

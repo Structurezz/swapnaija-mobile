@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Image, Alert, TextInput, Modal,
+  Image, Alert, TextInput, Modal, Platform, StatusBar, Linking,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,9 +18,11 @@ import { createReview } from '../../../src/api/reviews.api';
 import { COLORS, formatBC, getListingPlaceholder, resolveImageUrl } from '../../../src/utils/currency';
 import Button from '../../../src/components/ui/Button';
 import Avatar from '../../../src/components/ui/Avatar';
-import Badge from '../../../src/components/ui/Badge';
 import Spinner from '../../../src/components/ui/Spinner';
+import BackButton from '../../../src/components/ui/BackButton';
+import ReviewStars from '../../../src/components/ui/ReviewStars';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
 const NIGERIAN_STATES = [
   'Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno',
   'Cross River','Delta','Ebonyi','Edo','Ekiti','Enugu','FCT','Gombe','Imo',
@@ -42,92 +44,83 @@ const COURIERS = [
   { value: 'other',    label: 'Other Courier' },
 ];
 
-const EMPTY_ADDRESS = {
-  fullName: '', phone: '', addressLine1: '', addressLine2: '',
-  city: '', state: '', landmark: '',
+const SWAP_TYPE_LABELS = {
+  goods_for_goods:     { label: 'Goods ↔ Goods',     emoji: '📦' },
+  goods_for_service:   { label: 'Goods ↔ Service',   emoji: '🔧' },
+  service_for_goods:   { label: 'Service ↔ Goods',   emoji: '🔧' },
+  service_for_service: { label: 'Service ↔ Service', emoji: '🤝' },
 };
 
-const EMPTY_SHIPMENT = {
-  provider: '', providerLabel: '', trackingNumber: '',
-  trackingUrl: '', notes: '',
+const STATUS_COLOR = {
+  proposed:  { bg: '#FEF3C7', text: '#92400E', dot: '#D97706' },
+  accepted:  { bg: '#DBEAFE', text: '#1E40AF', dot: '#2563EB' },
+  in_escrow: { bg: '#EDE9FE', text: '#5B21B6', dot: '#7C3AED' },
+  shipped:   { bg: '#FFF7ED', text: '#92400E', dot: '#EA580C' },
+  completed: { bg: '#D1FAE5', text: '#065F46', dot: '#059669' },
+  disputed:  { bg: '#FEE2E2', text: '#991B1B', dot: '#DC2626' },
+  cancelled: { bg: '#F3F4F6', text: '#6B7280', dot: '#9CA3AF' },
 };
 
-function Section({ title, children }) {
+const STATUS_LABEL = {
+  proposed: 'Proposed', accepted: 'Accepted', in_escrow: 'In Escrow',
+  shipped: 'Shipped', completed: 'Completed', disputed: 'Disputed', cancelled: 'Cancelled',
+};
+
+const REVIEW_LABELS = ['', 'Poor experience', 'Fair', 'Good', 'Very good', 'Excellent! 🎉'];
+
+const EMPTY_ADDRESS  = { fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', landmark: '' };
+const EMPTY_SHIPMENT = { provider: '', providerLabel: '', trackingNumber: '', trackingUrl: '', notes: '' };
+
+// ─── Small UI helpers ─────────────────────────────────────────────────────────
+function StatusBadge({ status }) {
+  const c = STATUS_COLOR[status] || STATUS_COLOR.cancelled;
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+    <View style={[s.statusBadge, { backgroundColor: c.bg }]}>
+      <View style={[s.statusDot, { backgroundColor: c.dot }]} />
+      <Text style={[s.statusText, { color: c.text }]}>{STATUS_LABEL[status] || status}</Text>
+    </View>
+  );
+}
+
+function SectionCard({ title, icon, children, tint }) {
+  return (
+    <View style={[s.card, tint && { borderColor: tint, borderLeftWidth: 3 }]}>
+      {title && (
+        <View style={s.cardHeader}>
+          {icon && <Ionicons name={icon} size={15} color={COLORS.primary} />}
+          <Text style={s.cardTitle}>{title}</Text>
+        </View>
+      )}
       {children}
     </View>
   );
 }
 
-function ListingPreview({ listing, label }) {
-  const imgUri = resolveImageUrl(listing?.images?.[0]) || getListingPlaceholder(listing);
+function PartyChip({ name, paid, label }) {
   return (
-    <View style={styles.listingPreview}>
-      <Text style={styles.previewLabel}>{label}</Text>
-      <View style={styles.previewCard}>
-        <Image source={{ uri: imgUri }} style={styles.previewImg} resizeMode="cover" />
-        <View style={styles.previewInfo}>
-          <Text style={styles.previewTitle} numberOfLines={2}>{listing?.title}</Text>
-          <Text style={styles.previewValue}>{formatBC((listing?.estimatedValue ?? 0) * 100)}</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function AddressDisplay({ address, label }) {
-  if (!address) return null;
-  return (
-    <View style={styles.addressCard}>
-      <Text style={styles.addressLabel}>{label}</Text>
-      <Text style={styles.addressName}>{address.fullName} · {address.phone}</Text>
-      <Text style={styles.addressLine}>{address.addressLine1}</Text>
-      {address.addressLine2 ? <Text style={styles.addressLine}>{address.addressLine2}</Text> : null}
-      <Text style={styles.addressLine}>{address.city}, {address.state}</Text>
-      {address.landmark ? (
-        <Text style={styles.addressLandmark}>Landmark: {address.landmark}</Text>
-      ) : null}
-    </View>
-  );
-}
-
-function ShipmentDisplay({ shipment, label }) {
-  if (!shipment?.trackingNumber) return null;
-  return (
-    <View style={styles.shipmentCard}>
-      <View style={styles.shipmentRow}>
-        <Ionicons name="cube-outline" size={16} color={COLORS.primary} />
-        <Text style={styles.shipmentLabel}>{label}</Text>
-      </View>
-      <Text style={styles.shipmentProvider}>{shipment.providerLabel}</Text>
-      <Text style={styles.shipmentTracking}>Tracking: {shipment.trackingNumber}</Text>
-      {shipment.shippedAt && (
-        <Text style={styles.shipmentMeta}>
-          Shipped {format(new Date(shipment.shippedAt), 'MMM d, yyyy')}
-        </Text>
-      )}
-      {shipment.estimatedDelivery && (
-        <Text style={styles.shipmentMeta}>
-          Est. delivery {format(new Date(shipment.estimatedDelivery), 'MMM d, yyyy')}
-        </Text>
-      )}
-      {shipment.notes ? <Text style={styles.shipmentNotes}>{shipment.notes}</Text> : null}
+    <View style={[s.partyChip, paid ? s.partyChipDone : s.partyChipPending]}>
+      <Ionicons
+        name={paid ? 'checkmark-circle' : 'time-outline'}
+        size={13}
+        color={paid ? COLORS.success : COLORS.gray400}
+      />
+      <Text style={[s.partyChipText, paid ? { color: '#065F46' } : { color: COLORS.textSecondary }]} numberOfLines={1}>
+        {paid ? `✓ ${(name || '').split(' ')[0]}` : `${(name || '').split(' ')[0]}: pending`}
+      </Text>
     </View>
   );
 }
 
 function FieldInput({ label, value, onChangeText, placeholder, multiline, keyboardType, autoCapitalize, autoCorrect }) {
   return (
-    <View style={styles.fieldWrap}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+    <View style={s.fieldWrap}>
+      <Text style={s.fieldLabel}>{label}</Text>
       <TextInput
-        style={[styles.modalInput, multiline && { height: 80, textAlignVertical: 'top' }]}
+        style={[s.input, multiline && { height: 90, textAlignVertical: 'top' }]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder || ''}
-        placeholderTextColor={COLORS.textLight}
+        placeholderTextColor={COLORS.gray300}
         multiline={multiline}
         keyboardType={keyboardType || 'default'}
         autoCapitalize={autoCapitalize ?? 'words'}
@@ -137,23 +130,24 @@ function FieldInput({ label, value, onChangeText, placeholder, multiline, keyboa
   );
 }
 
+// ─── Main screen ─────────────────────────────────────────────────────────────
 export default function SwapDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
 
-  const [address, setAddress]   = useState(EMPTY_ADDRESS);
+  const [address,  setAddress]  = useState(EMPTY_ADDRESS);
   const [shipment, setShipment] = useState(EMPTY_SHIPMENT);
   const [showAddressModal,  setShowAddressModal]  = useState(false);
   const [showShipmentModal, setShowShipmentModal] = useState(false);
   const [showCourierPicker, setShowCourierPicker] = useState(false);
   const [showStatePicker,   setShowStatePicker]   = useState(false);
   const [showDisputeModal,  setShowDisputeModal]  = useState(false);
-  const [disputeReason, setDisputeReason] = useState('');
-  const [showReviewModal, setShowReviewModal] = useState(false);
-  const [reviewRating, setReviewRating]   = useState(5);
-  const [reviewComment, setReviewComment] = useState('');
+  const [showReviewModal,   setShowReviewModal]   = useState(false);
+  const [disputeReason,  setDisputeReason]  = useState('');
+  const [reviewRating,   setReviewRating]   = useState(0);
+  const [reviewComment,  setReviewComment]  = useState('');
 
   const { data: swap, isLoading } = useQuery({
     queryKey: ['swap', id],
@@ -167,7 +161,7 @@ export default function SwapDetailScreen() {
 
   const respondMutation = useMutation({
     mutationFn: (action) => respondToSwap(id, action),
-    onSuccess: () => { Toast.show({ type: 'success', text1: 'Done!' }); invalidate(); },
+    onSuccess: () => { Toast.show({ type: 'success', text1: 'Updated!' }); invalidate(); },
     onError: (err) => Toast.show({ type: 'error', text1: err?.response?.data?.error || 'Error' }),
   });
 
@@ -194,13 +188,35 @@ export default function SwapDetailScreen() {
 
   const escrowMutation = useMutation({
     mutationFn: () => payEscrowDeposit(id),
-    onSuccess: () => { Toast.show({ type: 'success', text1: 'Escrow deposit paid!' }); invalidate(); },
-    onError: (err) => Toast.show({ type: 'error', text1: err?.response?.data?.error || 'Insufficient balance' }),
+    onSuccess: (updated) => {
+      Toast.show({
+        type: 'success',
+        text1: updated?.status === 'in_escrow'
+          ? '🛡️ Escrow active! Both deposits secured.'
+          : 'Deposit paid! Waiting for the other party.',
+      });
+      invalidate();
+    },
+    onError: (err) => {
+      const msg = err?.response?.data?.error || 'Error';
+      Toast.show({
+        type: 'error',
+        text1: msg.toLowerCase().includes('insufficient') ? msg + ' Top up your wallet.' : msg,
+      });
+    },
   });
 
   const confirmMutation = useMutation({
     mutationFn: () => confirmSwap(id),
-    onSuccess: () => { Toast.show({ type: 'success', text1: 'Receipt confirmed!' }); invalidate(); },
+    onSuccess: (updated) => {
+      Toast.show({
+        type: 'success',
+        text1: updated?.status === 'completed'
+          ? '🎉 Swap completed! Escrow refund added to your Barter Credits.'
+          : 'Confirmed! Waiting for the other party.',
+      });
+      invalidate();
+    },
     onError: (err) => Toast.show({ type: 'error', text1: err?.response?.data?.error || 'Error' }),
   });
 
@@ -216,17 +232,34 @@ export default function SwapDetailScreen() {
 
   const topupMutation = useMutation({
     mutationFn: () => payTopUp(id),
-    onSuccess: () => { Toast.show({ type: 'success', text1: 'Top-up paid!' }); invalidate(); },
-    onError: (err) => Toast.show({ type: 'error', text1: err?.response?.data?.error || 'Error' }),
+    onSuccess: () => {
+      Toast.show({ type: 'success', text1: 'Top-up paid! Held in escrow.' });
+      invalidate();
+    },
+    onError: (err) => {
+      const msg = err?.response?.data?.error || 'Error';
+      Toast.show({
+        type: 'error',
+        text1: msg.toLowerCase().includes('insufficient') ? msg + ' Top up your wallet.' : msg,
+      });
+    },
   });
 
   const reviewMutation = useMutation({
-    mutationFn: () => createReview({ swapId: id, revieweeId: otherUser?.id, rating: reviewRating, comment: reviewComment }),
+    mutationFn: () => createReview({
+      swapId: id,
+      revieweeId: otherUser?.id,
+      rating: reviewRating,
+      comment: reviewComment,
+    }),
     onSuccess: () => {
       setShowReviewModal(false);
-      Toast.show({ type: 'success', text1: 'Review submitted!' });
+      Toast.show({ type: 'success', text1: 'Review submitted! ⭐' });
     },
-    onError: (err) => Toast.show({ type: 'error', text1: err?.response?.data?.error || 'Error' }),
+    onError: (err) => {
+      const msg = err?.response?.data?.error || 'Error';
+      Toast.show({ type: 'error', text1: msg.includes('already') ? 'You already reviewed this swap.' : msg });
+    },
   });
 
   const chatMutation = useMutation({
@@ -241,158 +274,221 @@ export default function SwapDetailScreen() {
   if (isLoading) return <Spinner full />;
   if (!swap) return null;
 
-  const isInitiator   = swap.initiatorId?.id === user?.id;
-  const myParty       = isInitiator ? 'initiator' : 'receiver';
-  const otherUser     = isInitiator ? swap.receiverId : swap.initiatorId;
-  const status        = swap.status;
+  // ── Derived state ─────────────────────────────────────────────────────────
+  const isInitiator    = swap.initiatorId?.id === user?.id;
+  const myParty        = isInitiator ? 'initiator' : 'receiver';
+  const otherParty     = isInitiator ? 'receiver' : 'initiator';
+  const otherUser      = isInitiator ? swap.receiverId : swap.initiatorId;
+  const status         = swap.status;
 
-  const iHavePaidEscrow  = swap[`${myParty}DepositPaid`];
-  const iHaveConfirmed   = swap[`${myParty}Confirmed`];
-  const iHaveSetAddress  = swap[`${myParty}AddressSet`];
-  const iHaveShipped     = swap[`${myParty}Shipped`];
-  const myAddress        = swap[`${myParty}Address`];
-  const myShipment       = swap[`${myParty}Shipment`];
-  const otherParty       = isInitiator ? 'receiver' : 'initiator';
-  const otherAddress     = swap[`${otherParty}Address`];
-  const otherShipment    = swap[`${otherParty}Shipment`];
+  const iHavePaidEscrow = swap[`${myParty}DepositPaid`];
+  const theyPaidEscrow  = swap[`${otherParty}DepositPaid`];
+  const iHaveConfirmed  = swap[`${myParty}Confirmed`];
+  const theyConfirmed   = swap[`${otherParty}Confirmed`];
+  const iHaveSetAddress = swap[`${myParty}AddressSet`];
+  const iHaveShipped    = swap[`${myParty}Shipped`];
+  const myAddress       = swap[`${myParty}Address`];
+  const myShipment      = swap[`${myParty}Shipment`];
+  const otherAddress    = swap[`${otherParty}Address`];
+  const otherShipment   = swap[`${otherParty}Shipment`];
 
+  const depositKobo     = swap.escrowDepositKobo || 100000;
+  const platformFeeKobo = Math.round(depositKobo * 0.02);
+  const refundKobo      = depositKobo - platformFeeKobo;
+
+  const swapTypeMeta   = SWAP_TYPE_LABELS[swap.swapType] || SWAP_TYPE_LABELS.goods_for_goods;
   const selectedCourier = COURIERS.find(c => c.value === shipment.provider);
+  const addressValid   = address.fullName && address.phone && address.addressLine1 && address.city && address.state;
+  const shipmentValid  = shipment.provider && shipment.trackingNumber;
 
-  const addressValid = address.fullName && address.phone && address.addressLine1 &&
-                       address.city && address.state;
-  const shipmentValid = shipment.provider && shipment.trackingNumber;
+  // Count pending actions to show badge
+  const pendingActions = [
+    status === 'proposed' && !isInitiator,
+    ['accepted', 'in_escrow'].includes(status) && !iHaveSetAddress,
+    status === 'in_escrow' && !iHaveShipped,
+    ['in_escrow', 'shipped'].includes(status) && !iHaveConfirmed,
+    status === 'accepted' && !iHavePaidEscrow,
+  ].filter(Boolean).length;
 
   return (
-    <View style={styles.screen}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Swap Details</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <View style={s.screen}>
+      <StatusBar barStyle="light-content" />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Status */}
-        <View style={styles.statusRow}>
-          <Badge status={status} size="md" />
-          <Text style={styles.swapDate}>
-            {swap.createdAt ? format(new Date(swap.createdAt), 'MMM d, yyyy') : ''}
+      {/* ── Hero Header ── */}
+      <View style={s.hero}>
+        <View style={s.heroNav}>
+          <BackButton dark fallback="/swaps" />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={s.heroTitle}>Swap Details</Text>
+            <Text style={s.heroSub} numberOfLines={1}>
+              #{(id || '').slice(-8).toUpperCase()}
+            </Text>
+          </View>
+          {pendingActions > 0 && (
+            <View style={s.pendingBadge}>
+              <Text style={s.pendingBadgeText}>{pendingActions} action{pendingActions > 1 ? 's' : ''} needed</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Status + Type pills */}
+        <View style={s.heroPills}>
+          <StatusBadge status={status} />
+          <View style={s.typePill}>
+            <Text style={s.typePillText}>{swapTypeMeta.emoji} {swapTypeMeta.label}</Text>
+          </View>
+          <Text style={s.heroDate}>
+            {swap.updatedAt ? format(new Date(swap.updatedAt), 'MMM d, yyyy') : ''}
           </Text>
         </View>
+      </View>
 
-        {/* Listings */}
-        <View style={styles.listingsRow}>
-          <ListingPreview listing={swap.initiatorListing} label="Initiator's item" />
-          <View style={styles.swapIcon}>
-            <Ionicons name="swap-horizontal" size={24} color={COLORS.primary} />
+      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+
+        {/* ── Listings side-by-side ── */}
+        <SectionCard>
+          <View style={s.listingsRow}>
+            <ListingCard
+              listing={swap.initiatorListing}
+              label={isInitiator ? 'Your item' : `${(swap.initiatorId?.fullName || '').split(' ')[0]}'s item`}
+              youLabel={isInitiator}
+            />
+            <View style={s.swapIcon}>
+              <Ionicons name="swap-horizontal" size={22} color={COLORS.primary} />
+            </View>
+            <ListingCard
+              listing={swap.receiverListing}
+              label={!isInitiator ? 'Your item' : `${(swap.receiverId?.fullName || '').split(' ')[0]}'s item`}
+              youLabel={!isInitiator}
+            />
           </View>
-          <ListingPreview listing={swap.receiverListing} label="Receiver's item" />
-        </View>
+          {swap.proposalNote ? (
+            <Text style={s.proposalNote}>"{swap.proposalNote}"</Text>
+          ) : null}
+        </SectionCard>
 
-        {/* Parties */}
-        <Section title="Parties">
-          <View style={styles.partiesRow}>
-            <View style={styles.partyCard}>
-              <Avatar uri={swap.initiatorId?.avatarUrl} name={swap.initiatorId?.fullName} size={44} />
-              <Text style={styles.partyName} numberOfLines={1}>{swap.initiatorId?.fullName || swap.initiatorId?.email}</Text>
-              <Text style={styles.partyRole}>Initiator</Text>
-            </View>
-            <Ionicons name="swap-horizontal" size={20} color={COLORS.gray400} />
-            <View style={styles.partyCard}>
-              <Avatar uri={swap.receiverId?.avatarUrl} name={swap.receiverId?.fullName} size={44} />
-              <Text style={styles.partyName} numberOfLines={1}>{swap.receiverId?.fullName || swap.receiverId?.email}</Text>
-              <Text style={styles.partyRole}>Receiver</Text>
-            </View>
+        {/* ── Parties ── */}
+        <SectionCard title="Parties" icon="people-outline">
+          <View style={s.partiesRow}>
+            <PartyUser user={swap.initiatorId} role="Initiator" isYou={isInitiator} />
+            <Ionicons name="swap-horizontal" size={18} color={COLORS.gray300} style={{ marginTop: 16 }} />
+            <PartyUser user={swap.receiverId} role="Receiver" isYou={!isInitiator} />
           </View>
-        </Section>
+        </SectionCard>
 
-        {/* Escrow */}
-        {['accepted', 'in_escrow', 'shipped'].includes(status) && (
-          <Section title="Escrow Deposit">
-            <View style={styles.escrowRow}>
-              <Text style={styles.escrowLabel}>Collateral</Text>
-              <Text style={styles.escrowVal}>{swap.collateralPercent}% · {formatBC(swap.escrowDepositKobo)}</Text>
-            </View>
-            <View style={styles.escrowRow}>
-              <View style={styles.escrowParty}>
-                <Ionicons
-                  name={swap.initiatorDepositPaid ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={18}
-                  color={swap.initiatorDepositPaid ? COLORS.success : COLORS.gray400}
-                />
-                <Text style={styles.escrowPartyName}>{swap.initiatorId?.fullName?.split(' ')[0] || 'Initiator'}</Text>
+        {/* ── Escrow ── */}
+        {['proposed', 'accepted', 'in_escrow', 'shipped'].includes(status) && (
+          <SectionCard
+            title="Escrow Protection"
+            icon="shield-checkmark-outline"
+            tint={status === 'in_escrow' ? COLORS.success : COLORS.primary}
+          >
+            {status === 'proposed' && (
+              <View style={s.escrowInfoBanner}>
+                <Ionicons name="information-circle-outline" size={15} color={COLORS.primary} />
+                <Text style={s.escrowInfoText}>If accepted, each party deposits this amount as collateral.</Text>
               </View>
-              <View style={styles.escrowParty}>
-                <Ionicons
-                  name={swap.receiverDepositPaid ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={18}
-                  color={swap.receiverDepositPaid ? COLORS.success : COLORS.gray400}
-                />
-                <Text style={styles.escrowPartyName}>{swap.receiverId?.fullName?.split(' ')[0] || 'Receiver'}</Text>
+            )}
+            {status === 'in_escrow' && (
+              <View style={s.escrowActiveBanner}>
+                <Ionicons name="shield-checkmark" size={15} color={COLORS.success} />
+                <Text style={s.escrowActiveText}>Escrow Active — Both deposits secured</Text>
               </View>
+            )}
+
+            <View style={s.escrowBreakdown}>
+              <EscrowRow label="Deposit per party" value={formatBC(depositKobo)} />
+              <EscrowRow label="Platform fee (2%)" value={`-${formatBC(platformFeeKobo)}`} />
+              <EscrowRow label="Refund on completion" value={formatBC(refundKobo)} highlight />
             </View>
+
+            {status !== 'proposed' && (
+              <View style={s.chipRow}>
+                <PartyChip name={swap.initiatorId?.fullName || 'Initiator'} paid={swap.initiatorDepositPaid} />
+                <PartyChip name={swap.receiverId?.fullName || 'Receiver'} paid={swap.receiverDepositPaid} />
+              </View>
+            )}
+
             {!iHavePaidEscrow && status === 'accepted' && (
               <Button
-                title={`Pay Escrow Deposit (${formatBC(swap.escrowDepositKobo)})`}
+                title={`Pay ${formatBC(depositKobo)} Escrow Deposit`}
                 onPress={() => escrowMutation.mutate()}
                 loading={escrowMutation.isPending}
+                icon={<Ionicons name="shield-outline" size={16} color={COLORS.white} />}
                 style={{ marginTop: 12 }}
               />
             )}
-          </Section>
+            {iHavePaidEscrow && !theyPaidEscrow && status === 'accepted' && (
+              <Text style={s.waitingText}>Waiting for {(otherUser?.fullName || '').split(' ')[0]} to pay their deposit…</Text>
+            )}
+          </SectionCard>
         )}
 
-        {/* Value gap */}
-        {swap.topUpAmountKobo > 0 && (
-          <Section title="Value Gap Top-Up">
-            <Text style={styles.escrowLabel}>
-              Gap: {formatBC(swap.topUpAmountKobo)} · paid by {swap.topUpPayerRole}
+        {/* Escrow refund note for completed */}
+        {status === 'completed' && swap.escrowActive && (
+          <View style={s.escrowRefundNote}>
+            <Ionicons name="shield-checkmark" size={14} color={COLORS.success} />
+            <Text style={s.escrowRefundText}>
+              Escrow deposit refunded — {formatBC(refundKobo)} returned to your Barter Credits.
             </Text>
-            {swap.topUpPayerRole === myParty && !swap.topUpPaid && (
-              <Button
-                title={`Pay Top-Up (${formatBC(swap.topUpAmountKobo)})`}
-                onPress={() => topupMutation.mutate()}
-                loading={topupMutation.isPending}
-                style={{ marginTop: 12 }}
-              />
-            )}
-            {swap.topUpPaid && (
-              <View style={styles.paidBadge}>
-                <Ionicons name="checkmark-circle" size={14} color={COLORS.success} />
-                <Text style={styles.paidText}>Top-up paid</Text>
+          </View>
+        )}
+
+        {/* ── Value Gap Top-Up ── */}
+        {swap.topUpAmountKobo > 0 && ['proposed', 'accepted', 'in_escrow'].includes(status) && (
+          <SectionCard title="Value Gap Top-Up" icon="cash-outline" tint="#D97706">
+            {status === 'proposed' ? (
+              <View style={s.topUpPaidRow}>
+                <Ionicons name="information-circle-outline" size={14} color="#D97706" />
+                <Text style={s.topUpPaidText}>
+                  There is a value gap of <Text style={s.topUpAmt}>{formatBC(swap.topUpAmountKobo)}</Text>.
+                  If accepted, the {swap.topUpPayerRole === myParty ? 'you' : `other party`} will need to pay this to balance the swap.
+                </Text>
+              </View>
+            ) : swap.topUpPaid ? (
+              <View style={s.topUpPaidRow}>
+                <Ionicons name="checkmark-circle" size={14} color="#D97706" />
+                <Text style={s.topUpPaidText}>
+                  Value gap of {formatBC(swap.topUpAmountKobo)} paid and held in escrow.
+                  Released to the other party on swap completion.
+                </Text>
+              </View>
+            ) : swap.topUpPayerRole === myParty ? (
+              <>
+                <Text style={s.topUpDesc}>
+                  Your item is worth less than the other party's. Pay{' '}
+                  <Text style={s.topUpAmt}>{formatBC(swap.topUpAmountKobo)}</Text> from your Barter Credits.
+                  This is held in escrow and transferred to them on swap completion.
+                </Text>
+                <Button
+                  title={`Pay ${formatBC(swap.topUpAmountKobo)} Top-Up`}
+                  onPress={() => topupMutation.mutate()}
+                  loading={topupMutation.isPending}
+                  icon={<Ionicons name="cash-outline" size={16} color={COLORS.white} />}
+                  style={{ marginTop: 10 }}
+                />
+              </>
+            ) : (
+              <View style={s.waitingRow}>
+                <Ionicons name="time-outline" size={14} color="#D97706" />
+                <Text style={s.topUpWaitText}>
+                  Waiting for {(otherUser?.fullName || '').split(' ')[0]} to pay the {formatBC(swap.topUpAmountKobo)} value-gap top-up.
+                </Text>
               </View>
             )}
-          </Section>
+          </SectionCard>
         )}
 
-        {/* Delivery Addresses */}
+        {/* ── Delivery Addresses ── */}
         {['accepted', 'in_escrow', 'shipped', 'completed'].includes(status) && (
-          <Section title="Delivery Addresses">
-            <Text style={styles.deliveryNote}>
-              Both parties set their receiving address so items can be shipped safely.
-            </Text>
-            <View style={styles.addressRow}>
-              <View style={styles.addressStatusItem}>
-                <Ionicons
-                  name={swap.initiatorAddressSet ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={18}
-                  color={swap.initiatorAddressSet ? COLORS.success : COLORS.gray400}
-                />
-                <Text style={styles.escrowPartyName}>{swap.initiatorId?.fullName?.split(' ')[0] || 'Initiator'}</Text>
-              </View>
-              <View style={styles.addressStatusItem}>
-                <Ionicons
-                  name={swap.receiverAddressSet ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={18}
-                  color={swap.receiverAddressSet ? COLORS.success : COLORS.gray400}
-                />
-                <Text style={styles.escrowPartyName}>{swap.receiverId?.fullName?.split(' ')[0] || 'Receiver'}</Text>
-              </View>
+          <SectionCard title="Delivery Addresses" icon="location-outline">
+            <Text style={s.sectionNote}>Both parties set their receiving address so items can be shipped safely.</Text>
+            <View style={s.chipRow}>
+              <PartyChip name={swap.initiatorId?.fullName || 'Initiator'} paid={swap.initiatorAddressSet} />
+              <PartyChip name={swap.receiverId?.fullName || 'Receiver'} paid={swap.receiverAddressSet} />
             </View>
-            {myAddress && <AddressDisplay address={myAddress} label="Your address" />}
-            {otherAddress && <AddressDisplay address={otherAddress} label="Their address" />}
+            {myAddress && <AddressCard address={myAddress} label="Your address" />}
+            {otherAddress && <AddressCard address={otherAddress} label="Their address" />}
             {!iHaveSetAddress && ['accepted', 'in_escrow'].includes(status) && (
               <Button
                 title="Set My Delivery Address"
@@ -401,39 +497,19 @@ export default function SwapDetailScreen() {
                 style={{ marginTop: 12 }}
               />
             )}
-          </Section>
+          </SectionCard>
         )}
 
-        {/* Shipment Tracking */}
+        {/* ── Shipment Tracking ── */}
         {['in_escrow', 'shipped', 'completed'].includes(status) && (
-          <Section title="Shipment Tracking">
-            <Text style={styles.deliveryNote}>
-              Both parties must ship their items and submit tracking info. When both have shipped, funds move to escrow release.
-            </Text>
-            <View style={styles.addressRow}>
-              <View style={styles.addressStatusItem}>
-                <Ionicons
-                  name={swap.initiatorShipped ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={18}
-                  color={swap.initiatorShipped ? COLORS.success : COLORS.gray400}
-                />
-                <Text style={styles.escrowPartyName}>{swap.initiatorId?.fullName?.split(' ')[0] || 'Initiator'} shipped</Text>
-              </View>
-              <View style={styles.addressStatusItem}>
-                <Ionicons
-                  name={swap.receiverShipped ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={18}
-                  color={swap.receiverShipped ? COLORS.success : COLORS.gray400}
-                />
-                <Text style={styles.escrowPartyName}>{swap.receiverId?.fullName?.split(' ')[0] || 'Receiver'} shipped</Text>
-              </View>
+          <SectionCard title="Shipment Tracking" icon="cube-outline" tint={COLORS.primary}>
+            <Text style={s.sectionNote}>Submit your tracking info after shipping. Escrow releases when both parties confirm receipt.</Text>
+            <View style={s.chipRow}>
+              <PartyChip name={swap.initiatorId?.fullName || 'Initiator'} paid={swap.initiatorShipped} />
+              <PartyChip name={swap.receiverId?.fullName || 'Receiver'} paid={swap.receiverShipped} />
             </View>
-            {myShipment?.trackingNumber && (
-              <ShipmentDisplay shipment={myShipment} label="Your shipment" />
-            )}
-            {otherShipment?.trackingNumber && (
-              <ShipmentDisplay shipment={otherShipment} label="Their shipment" />
-            )}
+            {myShipment?.trackingNumber && <ShipmentCard shipment={myShipment} label="Your shipment" />}
+            {otherShipment?.trackingNumber && <ShipmentCard shipment={otherShipment} label="Their shipment" />}
             {!iHaveShipped && status === 'in_escrow' && (
               <Button
                 title="Submit Shipment Info"
@@ -442,95 +518,85 @@ export default function SwapDetailScreen() {
                 style={{ marginTop: 12 }}
               />
             )}
-          </Section>
+          </SectionCard>
         )}
 
-        {/* Confirm Receipt */}
+        {/* ── Confirm Receipt ── */}
         {['shipped', 'in_escrow'].includes(status) && (
-          <Section title="Confirm Receipt">
-            <Text style={styles.deliveryNote}>
-              Confirm when you receive the item. Both confirmations release escrow.
-            </Text>
-            <View style={styles.addressRow}>
-              <View style={styles.addressStatusItem}>
-                <Ionicons
-                  name={swap.initiatorConfirmed ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={18}
-                  color={swap.initiatorConfirmed ? COLORS.success : COLORS.gray400}
-                />
-                <Text style={styles.escrowPartyName}>{swap.initiatorId?.fullName?.split(' ')[0]} received</Text>
-              </View>
-              <View style={styles.addressStatusItem}>
-                <Ionicons
-                  name={swap.receiverConfirmed ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={18}
-                  color={swap.receiverConfirmed ? COLORS.success : COLORS.gray400}
-                />
-                <Text style={styles.escrowPartyName}>{swap.receiverId?.fullName?.split(' ')[0]} received</Text>
-              </View>
+          <SectionCard title="Confirm Receipt" icon="checkmark-circle-outline">
+            <Text style={s.sectionNote}>Confirm when you receive the item in good condition. Both confirmations release escrow.</Text>
+            <View style={s.chipRow}>
+              <PartyChip name={swap.initiatorId?.fullName || 'Initiator'} paid={swap.initiatorConfirmed} />
+              <PartyChip name={swap.receiverId?.fullName || 'Receiver'} paid={swap.receiverConfirmed} />
             </View>
-          </Section>
+          </SectionCard>
         )}
 
-        {/* Proposal Note */}
-        {swap.proposalNote && (
-          <Section title="Proposal Note">
-            <Text style={styles.noteText}>{swap.proposalNote}</Text>
-          </Section>
-        )}
-
-        {/* Dispute Court Room — shown when swap is disputed */}
+        {/* ── Disputed ── */}
         {status === 'disputed' && (
-          <Section title="⚖️ Dispute Court">
-            <View style={styles.disputeBox}>
-              <View style={styles.disputeRow}>
-                <Ionicons name="warning-outline" size={16} color={COLORS.danger} />
-                <Text style={styles.disputeTitle}>Dispute under mediation</Text>
-              </View>
-              {swap.disputeReason ? (
-                <Text style={styles.disputeReason}>"{swap.disputeReason}"</Text>
-              ) : null}
-              <Text style={styles.disputeNote}>
-                Escrow funds are frozen. ARIA AI mediator is presiding over this case.
-              </Text>
-              <Button
-                title="⚖️ Enter Court Room"
-                variant="danger"
-                onPress={() => router.push(`/dispute/${id}`)}
-                icon={<Ionicons name="scale-outline" size={16} color={COLORS.white} />}
-                style={{ marginTop: 4 }}
-              />
+          <View style={s.disputeCard}>
+            <View style={s.disputeHeader}>
+              <Ionicons name="warning" size={16} color='#DC2626' />
+              <Text style={s.disputeTitle}>Dispute Under Mediation</Text>
             </View>
-          </Section>
+            {swap.disputeReason ? (
+              <Text style={s.disputeReason}>"{swap.disputeReason}"</Text>
+            ) : null}
+            <Text style={s.disputeNote}>
+              Escrow funds are frozen. ARIA AI mediator is presiding over this case.
+            </Text>
+            <Button
+              title="⚖️ Enter Court Room"
+              variant="danger"
+              onPress={() => router.push(`/dispute/${id}`)}
+              icon={<Ionicons name="scale-outline" size={15} color={COLORS.white} />}
+              style={{ marginTop: 8 }}
+            />
+          </View>
         )}
 
-        {/* Action buttons */}
-        <View style={styles.actions}>
+        {/* ── Actions ── */}
+        <View style={s.actions}>
           {/* Accept / Decline for receiver */}
           {swap.receiverId?.id === user?.id && status === 'proposed' && (
-            <>
+            <View style={s.actionRow}>
               <Button
                 title="Accept Swap"
                 onPress={() => respondMutation.mutate('accept')}
                 loading={respondMutation.isPending}
+                style={{ flex: 1 }}
+                icon={<Ionicons name="checkmark-circle-outline" size={16} color={COLORS.white} />}
               />
               <Button
-                title="Decline Swap"
+                title="Decline"
                 variant="danger"
+                style={{ flex: 1 }}
                 onPress={() => Alert.alert('Decline Swap', 'Are you sure?', [
                   { text: 'Keep', style: 'cancel' },
                   { text: 'Decline', style: 'destructive', onPress: () => respondMutation.mutate('decline') },
                 ])}
               />
-            </>
+            </View>
           )}
 
-          {/* Cancel for initiator */}
+          {/* Cancel for initiator when proposed */}
           {isInitiator && status === 'proposed' && (
             <Button
               title="Cancel Proposal"
               variant="outline"
               onPress={() => Alert.alert('Cancel Proposal', 'This cannot be undone.', [
+                { text: 'Keep', style: 'cancel' },
+                { text: 'Cancel', style: 'destructive', onPress: () => respondMutation.mutate('cancel') },
+              ])}
+            />
+          )}
+
+          {/* Cancel when accepted */}
+          {status === 'accepted' && (
+            <Button
+              title="Cancel Swap"
+              variant="outline"
+              onPress={() => Alert.alert('Cancel Swap', 'Cancel this swap?', [
                 { text: 'Keep', style: 'cancel' },
                 { text: 'Cancel', style: 'destructive', onPress: () => respondMutation.mutate('cancel') },
               ])}
@@ -550,7 +616,7 @@ export default function SwapDetailScreen() {
             />
           )}
 
-          {/* Chat */}
+          {/* Message */}
           {status !== 'completed' && status !== 'cancelled' && (
             <Button
               title="Message"
@@ -563,13 +629,10 @@ export default function SwapDetailScreen() {
 
           {/* Dispute */}
           {['in_escrow', 'shipped'].includes(status) && (
-            <Button
-              title="Raise Dispute"
-              variant="ghost"
-              onPress={() => setShowDisputeModal(true)}
-              icon={<Ionicons name="alert-circle-outline" size={16} color={COLORS.danger} />}
-              textStyle={{ color: COLORS.danger }}
-            />
+            <TouchableOpacity style={s.ghostBtn} onPress={() => setShowDisputeModal(true)} activeOpacity={0.7}>
+              <Ionicons name="alert-circle-outline" size={16} color={COLORS.danger} />
+              <Text style={s.ghostBtnText}>Raise a Dispute</Text>
+            </TouchableOpacity>
           )}
 
           {/* Review */}
@@ -577,185 +640,118 @@ export default function SwapDetailScreen() {
             <Button
               title="Leave a Review"
               variant="secondary"
-              onPress={() => setShowReviewModal(true)}
+              onPress={() => { setReviewRating(0); setReviewComment(''); setShowReviewModal(true); }}
               icon={<Ionicons name="star-outline" size={16} color={COLORS.primary} />}
             />
           )}
         </View>
       </ScrollView>
 
-      {/* Delivery Address Modal */}
+      {/* ── Delivery Address Modal ── */}
       <Modal visible={showAddressModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modal} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-            <View style={styles.modalTitleRow}>
-              <Text style={styles.modalTitle}>Your Delivery Address</Text>
-              <TouchableOpacity onPress={() => { setShowAddressModal(false); setShowStatePicker(false); }}>
-                <Ionicons name="close" size={22} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.modalSubtitle}>
-              The other party will ship your item to this address.
-            </Text>
+        <View style={s.overlay}>
+          <ScrollView style={s.sheet} keyboardShouldPersistTaps="handled" nestedScrollEnabled showsVerticalScrollIndicator={false}>
+            <ModalHeader title="Your Delivery Address" onClose={() => { setShowAddressModal(false); setShowStatePicker(false); }} />
+            <Text style={s.sheetNote}>The other party will ship your item to this address.</Text>
             <FieldInput label="Full Name" value={address.fullName} onChangeText={v => setAddress(a => ({ ...a, fullName: v }))} placeholder="John Doe" />
-            <FieldInput label="Phone" value={address.phone} onChangeText={v => setAddress(a => ({ ...a, phone: v }))} placeholder="+2348000000000" keyboardType="phone-pad" />
+            <FieldInput label="Phone" value={address.phone} onChangeText={v => setAddress(a => ({ ...a, phone: v }))} placeholder="+2348000000000" keyboardType="phone-pad" autoCapitalize="none" />
             <FieldInput label="Address Line 1" value={address.addressLine1} onChangeText={v => setAddress(a => ({ ...a, addressLine1: v }))} placeholder="12 Adeola Odeku Street" />
             <FieldInput label="Address Line 2 (optional)" value={address.addressLine2} onChangeText={v => setAddress(a => ({ ...a, addressLine2: v }))} placeholder="Flat 4B" />
             <FieldInput label="City / Town" value={address.city} onChangeText={v => setAddress(a => ({ ...a, city: v }))} placeholder="Lagos Island" />
-
-            <View style={styles.fieldWrap}>
-              <Text style={styles.fieldLabel}>State</Text>
-              <TouchableOpacity
-                style={[styles.pickerBtn, showStatePicker && { borderColor: COLORS.primary }]}
-                onPress={() => setShowStatePicker(v => !v)}
-              >
-                <Text style={address.state ? styles.pickerVal : styles.pickerPlaceholder}>
-                  {address.state || 'Select state...'}
-                </Text>
+            <View style={s.fieldWrap}>
+              <Text style={s.fieldLabel}>State</Text>
+              <TouchableOpacity style={[s.pickerBtn, showStatePicker && { borderColor: COLORS.primary }]} onPress={() => setShowStatePicker(v => !v)}>
+                <Text style={address.state ? s.pickerVal : s.pickerPlaceholder}>{address.state || 'Select state…'}</Text>
                 <Ionicons name={showStatePicker ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
               </TouchableOpacity>
               {showStatePicker && (
-                <View style={styles.stateDropdown}>
-                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={{ maxHeight: 220 }}>
-                    {NIGERIAN_STATES.map(s => (
-                      <TouchableOpacity
-                        key={s}
-                        style={styles.pickerItem}
-                        onPress={() => { setAddress(a => ({ ...a, state: s })); setShowStatePicker(false); }}
-                      >
-                        <Text style={[styles.pickerItemText, address.state === s && { color: COLORS.primary, fontWeight: '700' }]}>{s}</Text>
-                        {address.state === s && <Ionicons name="checkmark" size={16} color={COLORS.primary} />}
+                <View style={s.dropdown}>
+                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={{ maxHeight: 200 }}>
+                    {NIGERIAN_STATES.map(st => (
+                      <TouchableOpacity key={st} style={s.dropdownItem} onPress={() => { setAddress(a => ({ ...a, state: st })); setShowStatePicker(false); }}>
+                        <Text style={[s.dropdownItemText, address.state === st && { color: COLORS.primary, fontWeight: '700' }]}>{st}</Text>
+                        {address.state === st && <Ionicons name="checkmark" size={15} color={COLORS.primary} />}
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
                 </View>
               )}
             </View>
-
             <FieldInput label="Landmark (optional)" value={address.landmark} onChangeText={v => setAddress(a => ({ ...a, landmark: v }))} placeholder="Near Shoprite" />
-
-            <View style={styles.modalBtns}>
+            <View style={s.sheetBtns}>
               <Button title="Cancel" variant="outline" onPress={() => { setShowAddressModal(false); setShowStatePicker(false); }} style={{ flex: 1 }} />
-              <Button
-                title="Save Address"
-                onPress={() => addressMutation.mutate()}
-                loading={addressMutation.isPending}
-                disabled={!addressValid}
-                style={{ flex: 1 }}
-              />
+              <Button title="Save Address" onPress={() => addressMutation.mutate()} loading={addressMutation.isPending} disabled={!addressValid} style={{ flex: 1 }} />
             </View>
             <View style={{ height: 40 }} />
           </ScrollView>
         </View>
       </Modal>
 
-      {/* Shipment Modal */}
+      {/* ── Shipment Modal ── */}
       <Modal visible={showShipmentModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modal} keyboardShouldPersistTaps="handled">
-            <View style={styles.modalTitleRow}>
-              <Text style={styles.modalTitle}>Submit Shipment Info</Text>
-              <TouchableOpacity onPress={() => setShowShipmentModal(false)}>
-                <Ionicons name="close" size={22} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.modalSubtitle}>
-              Enter your courier and tracking details so the other party can track their delivery.
-            </Text>
-
-            <View style={styles.fieldWrap}>
-              <Text style={styles.fieldLabel}>Courier / Delivery Company</Text>
-              <TouchableOpacity
-                style={[styles.pickerBtn, showCourierPicker && { borderColor: COLORS.primary }]}
-                onPress={() => setShowCourierPicker(v => !v)}
-              >
-                <Text style={shipment.provider ? styles.pickerVal : styles.pickerPlaceholder}>
-                  {selectedCourier?.label || 'Select courier...'}
-                </Text>
+        <View style={s.overlay}>
+          <ScrollView style={s.sheet} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <ModalHeader title="Submit Shipment Info" onClose={() => setShowShipmentModal(false)} />
+            <Text style={s.sheetNote}>Enter your courier and tracking details so the other party can track their delivery.</Text>
+            <View style={s.fieldWrap}>
+              <Text style={s.fieldLabel}>Courier / Delivery Company</Text>
+              <TouchableOpacity style={[s.pickerBtn, showCourierPicker && { borderColor: COLORS.primary }]} onPress={() => setShowCourierPicker(v => !v)}>
+                <Text style={shipment.provider ? s.pickerVal : s.pickerPlaceholder}>{selectedCourier?.label || 'Select courier…'}</Text>
                 <Ionicons name={showCourierPicker ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
               </TouchableOpacity>
               {showCourierPicker && (
-                <View style={styles.stateDropdown}>
-                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={{ maxHeight: 220 }}>
+                <View style={s.dropdown}>
+                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={{ maxHeight: 200 }}>
                     {COURIERS.map(c => (
-                      <TouchableOpacity
-                        key={c.value}
-                        style={styles.pickerItem}
-                        onPress={() => {
-                          setShipment(s => ({ ...s, provider: c.value, providerLabel: c.label }));
-                          setShowCourierPicker(false);
-                        }}
-                      >
-                        <Text style={[styles.pickerItemText, shipment.provider === c.value && { color: COLORS.primary, fontWeight: '700' }]}>
-                          {c.label}
-                        </Text>
-                        {shipment.provider === c.value && <Ionicons name="checkmark" size={16} color={COLORS.primary} />}
+                      <TouchableOpacity key={c.value} style={s.dropdownItem} onPress={() => { setShipment(sh => ({ ...sh, provider: c.value, providerLabel: c.label })); setShowCourierPicker(false); }}>
+                        <Text style={[s.dropdownItemText, shipment.provider === c.value && { color: COLORS.primary, fontWeight: '700' }]}>{c.label}</Text>
+                        {shipment.provider === c.value && <Ionicons name="checkmark" size={15} color={COLORS.primary} />}
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
                 </View>
               )}
             </View>
-
-            <FieldInput
-              label="Tracking Number"
-              value={shipment.trackingNumber}
-              onChangeText={v => setShipment(s => ({ ...s, trackingNumber: v }))}
-              placeholder="e.g. GIG-1234567890"
-            />
-            <FieldInput
-              label="Tracking URL (optional)"
-              value={shipment.trackingUrl}
-              onChangeText={v => setShipment(s => ({ ...s, trackingUrl: v }))}
-              placeholder="e.g. track.gigl.com/abc123"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <FieldInput
-              label="Notes (optional)"
-              value={shipment.notes}
-              onChangeText={v => setShipment(s => ({ ...s, notes: v }))}
-              placeholder="Fragile — handle with care"
-              multiline
-            />
-
-            <View style={styles.modalBtns}>
+            <FieldInput label="Tracking Number" value={shipment.trackingNumber} onChangeText={v => setShipment(sh => ({ ...sh, trackingNumber: v }))} placeholder="e.g. GIG-1234567890" autoCapitalize="none" autoCorrect={false} />
+            <FieldInput label="Tracking URL (optional)" value={shipment.trackingUrl} onChangeText={v => setShipment(sh => ({ ...sh, trackingUrl: v }))} placeholder="e.g. track.gigl.com/abc123" autoCapitalize="none" autoCorrect={false} />
+            <FieldInput label="Notes (optional)" value={shipment.notes} onChangeText={v => setShipment(sh => ({ ...sh, notes: v }))} placeholder="Fragile — handle with care" multiline />
+            <View style={s.sheetBtns}>
               <Button title="Cancel" variant="outline" onPress={() => setShowShipmentModal(false)} style={{ flex: 1 }} />
-              <Button
-                title="Submit"
-                onPress={() => shipmentMutation.mutate()}
-                loading={shipmentMutation.isPending}
-                disabled={!shipmentValid}
-                style={{ flex: 1 }}
-              />
+              <Button title="Submit" onPress={() => shipmentMutation.mutate()} loading={shipmentMutation.isPending} disabled={!shipmentValid} style={{ flex: 1 }} />
             </View>
             <View style={{ height: 40 }} />
           </ScrollView>
         </View>
       </Modal>
 
-      {/* Dispute Modal */}
+      {/* ── Dispute Modal ── */}
       <Modal visible={showDisputeModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modal}>
-            <View style={styles.modalTitleRow}>
-              <Text style={styles.modalTitle}>Raise Dispute</Text>
-              <TouchableOpacity onPress={() => setShowDisputeModal(false)}>
-                <Ionicons name="close" size={22} color={COLORS.textSecondary} />
-              </TouchableOpacity>
+        <View style={s.overlay}>
+          <View style={s.sheet}>
+            <ModalHeader title="Raise a Dispute" onClose={() => setShowDisputeModal(false)} />
+            {/* Warning card */}
+            <View style={s.disputeWarn}>
+              <View style={s.disputeWarnRow}>
+                <Ionicons name="information-circle-outline" size={15} color="#D97706" />
+                <Text style={s.disputeWarnTitle}>Before raising a dispute</Text>
+              </View>
+              <Text style={s.disputeWarnBody}>
+                Try messaging the other party first. If you raise a dispute, all escrow funds are frozen and
+                SwapNaija will review within 24 hours. The party found at fault may lose their deposit.
+              </Text>
             </View>
-            <Text style={styles.modalSubtitle}>
-              Describe the issue clearly. Our team will review within 24 hours and your escrow funds are safe.
-            </Text>
+            <Text style={s.fieldLabel}>Describe the issue</Text>
             <TextInput
-              style={[styles.modalInput, { height: 120, textAlignVertical: 'top' }]}
+              style={[s.input, { height: 120, textAlignVertical: 'top', marginBottom: 4 }]}
               value={disputeReason}
               onChangeText={setDisputeReason}
-              placeholder="e.g. Item not received after 10 days, tracking shows delivered but I got nothing..."
-              placeholderTextColor={COLORS.textLight}
+              placeholder="What went wrong? e.g. Item not as described, other party didn't respond..."
+              placeholderTextColor={COLORS.gray300}
               multiline
+              maxLength={1000}
             />
-            <View style={styles.modalBtns}>
+            <Text style={s.charCount}>{disputeReason.length}/1000 · min 10 characters</Text>
+            <View style={[s.sheetBtns, { marginTop: 12 }]}>
               <Button title="Cancel" variant="outline" onPress={() => setShowDisputeModal(false)} style={{ flex: 1 }} />
               <Button
                 title="Submit"
@@ -770,43 +766,48 @@ export default function SwapDetailScreen() {
         </View>
       </Modal>
 
-      {/* Review Modal */}
+      {/* ── Review Modal ── */}
       <Modal visible={showReviewModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modal}>
-            <View style={styles.modalTitleRow}>
-              <Text style={styles.modalTitle}>Leave a Review</Text>
-              <TouchableOpacity onPress={() => setShowReviewModal(false)}>
-                <Ionicons name="close" size={22} color={COLORS.textSecondary} />
-              </TouchableOpacity>
+        <View style={s.overlay}>
+          <View style={s.sheet}>
+            <ModalHeader title="Leave a Review" onClose={() => setShowReviewModal(false)} />
+
+            {/* Who you're reviewing */}
+            <View style={s.reviewTarget}>
+              <Avatar uri={otherUser?.avatarUrl} name={otherUser?.fullName} size={44} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={s.reviewTargetName}>{otherUser?.fullName}</Text>
+                <Text style={s.reviewTargetRole}>Your swap partner</Text>
+              </View>
             </View>
-            <Text style={styles.modalSubtitle}>How was your swap with {otherUser?.fullName}?</Text>
-            <View style={styles.ratingRow}>
-              {[1, 2, 3, 4, 5].map((s) => (
-                <TouchableOpacity key={s} onPress={() => setReviewRating(s)}>
-                  <Ionicons
-                    name={s <= reviewRating ? 'star' : 'star-outline'}
-                    size={32}
-                    color={s <= reviewRating ? COLORS.accent : COLORS.gray300}
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
+
+            <Text style={s.fieldLabel}>How was the swap?</Text>
+            <ReviewStars rating={reviewRating} size={34} interactive onChange={setReviewRating} />
+            {reviewRating > 0 && (
+              <Text style={s.reviewLabel}>{REVIEW_LABELS[reviewRating]}</Text>
+            )}
+
+            <Text style={[s.fieldLabel, { marginTop: 14 }]}>Comment <Text style={{ fontWeight: '400', color: COLORS.textSecondary }}>(optional)</Text></Text>
             <TextInput
-              style={[styles.modalInput, { height: 80, textAlignVertical: 'top' }]}
+              style={[s.input, { height: 90, textAlignVertical: 'top', marginBottom: 4 }]}
               value={reviewComment}
               onChangeText={setReviewComment}
-              placeholder="Share your experience (optional)..."
-              placeholderTextColor={COLORS.textLight}
+              placeholder="Describe how the swap went — was the item as described?"
+              placeholderTextColor={COLORS.gray300}
               multiline
+              maxLength={500}
             />
-            <View style={styles.modalBtns}>
+            <Text style={s.charCount}>{reviewComment.length}/500</Text>
+
+            <View style={[s.sheetBtns, { marginTop: 12 }]}>
               <Button title="Skip" variant="outline" onPress={() => setShowReviewModal(false)} style={{ flex: 1 }} />
               <Button
-                title="Submit"
+                title="Submit Review"
                 onPress={() => reviewMutation.mutate()}
                 loading={reviewMutation.isPending}
+                disabled={reviewRating === 0}
                 style={{ flex: 1 }}
+                icon={<Ionicons name="star-outline" size={15} color={COLORS.white} />}
               />
             </View>
           </View>
@@ -816,183 +817,482 @@ export default function SwapDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// ─── Sub-components ───────────────────────────────────────────────────────────
+function ListingCard({ listing, label, youLabel }) {
+  const imgUri = resolveImageUrl(listing?.images?.[0]) || getListingPlaceholder(listing);
+  return (
+    <View style={s.listingCard}>
+      <Text style={s.listingLabel}>{label}</Text>
+      <View style={s.listingCardInner}>
+        <Image source={{ uri: imgUri }} style={s.listingImg} resizeMode="cover" />
+        {youLabel && (
+          <View style={s.youBadge}>
+            <Text style={s.youBadgeText}>You</Text>
+          </View>
+        )}
+        <View style={s.listingInfo}>
+          <Text style={s.listingTitle} numberOfLines={2}>{listing?.title || '—'}</Text>
+          <Text style={s.listingValue}>{formatBC((listing?.estimatedValue ?? 0) * 100)}</Text>
+          {listing?.condition && (
+            <View style={s.condBadge}>
+              <Text style={s.condBadgeText}>{listing.condition}</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function PartyUser({ user: u, role, isYou }) {
+  return (
+    <View style={s.partyUser}>
+      <Avatar uri={u?.avatarUrl} name={u?.fullName} size={48} />
+      {isYou && <View style={s.youTag}><Text style={s.youTagText}>You</Text></View>}
+      <Text style={s.partyName} numberOfLines={1}>{u?.fullName || u?.email || '—'}</Text>
+      {u?.locationState ? (
+        <View style={s.locationRow}>
+          <Ionicons name="location-outline" size={11} color={COLORS.textSecondary} />
+          <Text style={s.locationText}>{u.locationState}</Text>
+        </View>
+      ) : null}
+      <Text style={s.partyRole}>{role}</Text>
+    </View>
+  );
+}
+
+function EscrowRow({ label, value, highlight }) {
+  return (
+    <View style={s.escrowRow}>
+      <Text style={s.escrowRowLabel}>{label}</Text>
+      <Text style={[s.escrowRowVal, highlight && { color: COLORS.primary, fontWeight: '700' }]}>{value}</Text>
+    </View>
+  );
+}
+
+function AddressCard({ address, label }) {
+  return (
+    <View style={s.addrCard}>
+      <Text style={s.addrCardLabel}>{label}</Text>
+      <Text style={s.addrName}>{address.fullName} · {address.phone}</Text>
+      <Text style={s.addrLine}>{address.addressLine1}</Text>
+      {address.addressLine2 ? <Text style={s.addrLine}>{address.addressLine2}</Text> : null}
+      <Text style={s.addrLine}>{address.city}, {address.state}</Text>
+      {address.landmark ? <Text style={s.addrLandmark}>Near {address.landmark}</Text> : null}
+    </View>
+  );
+}
+
+function ShipmentCard({ shipment, label }) {
+  const [open, setOpen] = React.useState(false);
+  if (!shipment?.trackingNumber) return null;
+
+  const hasUrl = !!shipment.trackingUrl;
+
+  const openTracking = () => {
+    if (hasUrl) {
+      const url = shipment.trackingUrl.startsWith('http')
+        ? shipment.trackingUrl
+        : `https://${shipment.trackingUrl}`;
+      Linking.openURL(url).catch(() =>
+        Alert.alert('Cannot open link', 'Copy the tracking number and visit the courier website.')
+      );
+    }
+  };
+
+  return (
+    <>
+      <TouchableOpacity style={s.shipCard} onPress={() => setOpen(true)} activeOpacity={0.75}>
+        <View style={s.shipRow}>
+          <Ionicons name="cube-outline" size={14} color={COLORS.primary} />
+          <Text style={s.shipLabel}>{label}</Text>
+          <View style={{ flex: 1 }} />
+          <View style={s.shipViewChip}>
+            <Text style={s.shipViewChipText}>View details</Text>
+            <Ionicons name="chevron-forward" size={12} color={COLORS.primary} />
+          </View>
+        </View>
+        <Text style={s.shipProvider}>{shipment.providerLabel}</Text>
+        <Text style={s.shipTracking} numberOfLines={1}>{shipment.trackingNumber}</Text>
+      </TouchableOpacity>
+
+      {/* Shipment detail bottom sheet */}
+      <Modal visible={open} animationType="slide" transparent>
+        <View style={s.overlay}>
+          <View style={s.sheet}>
+            <View style={s.sheetHeader}>
+              <Text style={s.sheetTitle}>Shipment Details</Text>
+              <TouchableOpacity onPress={() => setOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={22} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Courier */}
+            <View style={s.shipDetailRow}>
+              <View style={s.shipDetailIcon}>
+                <Ionicons name="car-outline" size={18} color={COLORS.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.shipDetailMeta}>Courier</Text>
+                <Text style={s.shipDetailVal}>{shipment.providerLabel || '—'}</Text>
+              </View>
+            </View>
+
+            {/* Tracking number */}
+            <View style={s.shipDetailRow}>
+              <View style={s.shipDetailIcon}>
+                <Ionicons name="barcode-outline" size={18} color={COLORS.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.shipDetailMeta}>Tracking Number</Text>
+                <Text style={[s.shipDetailVal, s.shipTracking]}>{shipment.trackingNumber}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => Alert.alert('Copied', shipment.trackingNumber)}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <Ionicons name="copy-outline" size={18} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Shipped at */}
+            {shipment.shippedAt && (
+              <View style={s.shipDetailRow}>
+                <View style={s.shipDetailIcon}>
+                  <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.shipDetailMeta}>Shipped On</Text>
+                  <Text style={s.shipDetailVal}>{format(new Date(shipment.shippedAt), 'MMMM d, yyyy')}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Est delivery */}
+            {shipment.estimatedDelivery && (
+              <View style={s.shipDetailRow}>
+                <View style={s.shipDetailIcon}>
+                  <Ionicons name="time-outline" size={18} color={COLORS.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.shipDetailMeta}>Estimated Delivery</Text>
+                  <Text style={s.shipDetailVal}>{format(new Date(shipment.estimatedDelivery), 'MMMM d, yyyy')}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Notes */}
+            {shipment.notes && (
+              <View style={s.shipDetailRow}>
+                <View style={s.shipDetailIcon}>
+                  <Ionicons name="document-text-outline" size={18} color={COLORS.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.shipDetailMeta}>Notes</Text>
+                  <Text style={s.shipDetailVal}>{shipment.notes}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Tracking URL CTA */}
+            {hasUrl ? (
+              <TouchableOpacity style={s.trackBtn} onPress={openTracking} activeOpacity={0.8}>
+                <Ionicons name="open-outline" size={16} color="#fff" />
+                <Text style={s.trackBtnText}>Track on {shipment.providerLabel || 'Courier'} Website</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={s.trackBtnDisabled}>
+                <Ionicons name="information-circle-outline" size={15} color={COLORS.textSecondary} />
+                <Text style={s.trackBtnDisabledText}>No tracking link provided — use the tracking number on the courier's website.</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
+function ModalHeader({ title, onClose }) {
+  return (
+    <View style={s.sheetHeader}>
+      <Text style={s.sheetTitle}>{title}</Text>
+      <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Ionicons name="close" size={22} color={COLORS.textSecondary} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const GREEN  = '#059669';
+const DARK   = '#0A1628';
+
+const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 56,
+
+  // Hero header
+  hero: {
+    backgroundColor: DARK,
+    paddingTop: Platform.OS === 'ios' ? 56 : 40,
     paddingHorizontal: 16,
-    paddingBottom: 12,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    paddingBottom: 16,
   },
-  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: COLORS.text },
+  heroNav: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  heroTitle: { fontSize: 18, fontWeight: '700', color: '#fff' },
+  heroSub: { fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 1 },
+  heroPills: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  heroDate: { fontSize: 11, color: 'rgba(255,255,255,0.45)', marginLeft: 'auto' },
 
-  content: { padding: 20, gap: 4 },
-  statusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+  pendingBadge: {
+    backgroundColor: '#D97706',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  swapDate: { fontSize: 13, color: COLORS.textSecondary },
+  pendingBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
 
-  listingsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 8 },
-  listingPreview: { flex: 1 },
-  previewLabel: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '600', marginBottom: 4 },
-  previewCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  previewImg: { width: '100%', height: 70, backgroundColor: COLORS.gray100 },
-  previewInfo: { padding: 8 },
-  previewTitle: { fontSize: 12, fontWeight: '600', color: COLORS.text, marginBottom: 2 },
-  previewValue: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
-  swapIcon: { paddingHorizontal: 4, paddingTop: 16 },
+  // Status badge
+  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontSize: 12, fontWeight: '700' },
 
-  section: {
+  // Swap type pill
+  typePill: { backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
+  typePillText: { fontSize: 11, fontWeight: '600', color: '#fff' },
+
+  // Content
+  content: { padding: 16, gap: 12, paddingBottom: 60 },
+
+  // Card
+  card: {
     backgroundColor: COLORS.white,
     borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
+    gap: 10,
   },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 12 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  cardTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
 
-  partiesRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  partyCard: { flex: 1, alignItems: 'center', gap: 6 },
-  partyName: { fontSize: 13, fontWeight: '600', color: COLORS.text, textAlign: 'center' },
-  partyRole: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '500' },
-
-  escrowRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  escrowLabel: { fontSize: 13, color: COLORS.textSecondary },
-  escrowVal: { fontSize: 13, fontWeight: '700', color: COLORS.text },
-  escrowParty: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  escrowPartyName: { fontSize: 13, color: COLORS.text },
-
-  paidBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
-  paidText: { fontSize: 12, color: COLORS.success, fontWeight: '600' },
-
-  deliveryNote: { fontSize: 12, color: COLORS.textSecondary, lineHeight: 18, marginBottom: 12 },
-  addressRow: { flexDirection: 'row', gap: 20, marginBottom: 12 },
-  addressStatusItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  addressCard: {
+  // Listings
+  listingsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  listingCard: { flex: 1 },
+  listingLabel: { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
+  listingCardInner: {
     backgroundColor: COLORS.gray50,
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 8,
-    gap: 2,
+    borderRadius: 12,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: COLORS.border,
+    position: 'relative',
   },
-  addressLabel: { fontSize: 11, fontWeight: '700', color: COLORS.primary, marginBottom: 4 },
-  addressName: { fontSize: 13, fontWeight: '600', color: COLORS.text },
-  addressLine: { fontSize: 13, color: COLORS.textSecondary },
-  addressLandmark: { fontSize: 12, color: COLORS.textLight, fontStyle: 'italic' },
+  listingImg: { width: '100%', height: 76, backgroundColor: COLORS.gray100 },
+  youBadge: {
+    position: 'absolute', top: 6, left: 6,
+    backgroundColor: GREEN, borderRadius: 6,
+    paddingHorizontal: 6, paddingVertical: 2,
+  },
+  youBadgeText: { fontSize: 9, fontWeight: '700', color: '#fff' },
+  listingInfo: { padding: 8, gap: 3 },
+  listingTitle: { fontSize: 11, fontWeight: '600', color: COLORS.text },
+  listingValue: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
+  condBadge: { backgroundColor: COLORS.gray100, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2, alignSelf: 'flex-start' },
+  condBadgeText: { fontSize: 9, color: COLORS.textSecondary, fontWeight: '600' },
+  swapIcon: { paddingTop: 34, paddingHorizontal: 2 },
 
-  shipmentCard: {
+  proposalNote: {
+    fontSize: 13, color: COLORS.textSecondary, fontStyle: 'italic',
+    borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 10, marginTop: 2,
+  },
+
+  // Parties
+  partiesRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  partyUser: { flex: 1, alignItems: 'center', gap: 4, position: 'relative' },
+  partyName: { fontSize: 13, fontWeight: '700', color: COLORS.text, textAlign: 'center' },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  locationText: { fontSize: 11, color: COLORS.textSecondary },
+  partyRole: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '500' },
+  youTag: {
+    position: 'absolute', top: -4, right: 8,
+    backgroundColor: GREEN, borderRadius: 6,
+    paddingHorizontal: 5, paddingVertical: 2,
+  },
+  youTagText: { fontSize: 9, fontWeight: '700', color: '#fff' },
+
+  // Escrow
+  escrowInfoBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 6,
+    backgroundColor: COLORS.primaryLight, borderRadius: 10,
+    padding: 10, borderWidth: 1, borderColor: `${COLORS.primary}30`,
+  },
+  escrowInfoText: { fontSize: 12, color: COLORS.primary, flex: 1, lineHeight: 17 },
+  escrowActiveBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#D1FAE5', borderRadius: 10,
+    padding: 10, borderWidth: 1, borderColor: '#6EE7B7',
+  },
+  escrowActiveText: { fontSize: 12, fontWeight: '700', color: '#065F46', flex: 1 },
+  escrowBreakdown: {
+    backgroundColor: COLORS.gray50, borderRadius: 10, padding: 12,
+    gap: 6, borderWidth: 1, borderColor: COLORS.border,
+  },
+  escrowRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  escrowRowLabel: { fontSize: 12, color: COLORS.textSecondary },
+  escrowRowVal: { fontSize: 12, fontWeight: '600', color: COLORS.text },
+  waitingText: { fontSize: 12, color: COLORS.textSecondary, textAlign: 'center', fontStyle: 'italic', marginTop: 4 },
+
+  escrowRefundNote: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: '#D1FAE5', borderRadius: 12, padding: 12,
+    borderWidth: 1, borderColor: '#6EE7B7',
+  },
+  escrowRefundText: { fontSize: 12, color: '#065F46', flex: 1, lineHeight: 18 },
+
+  // Chip row
+  chipRow: { flexDirection: 'row', gap: 8 },
+  partyChip: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 10, padding: 8 },
+  partyChipDone: { backgroundColor: '#D1FAE5' },
+  partyChipPending: { backgroundColor: COLORS.gray100 },
+  partyChipText: { fontSize: 12, fontWeight: '600', flex: 1 },
+
+  // Top-up
+  topUpPaidRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  topUpPaidText: { fontSize: 12, color: '#92400E', flex: 1, lineHeight: 18 },
+  topUpDesc: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 19 },
+  topUpAmt: { fontWeight: '700', color: '#D97706' },
+  waitingRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  topUpWaitText: { fontSize: 12, color: '#92400E', flex: 1, lineHeight: 18 },
+
+  // Sections
+  sectionNote: { fontSize: 12, color: COLORS.textSecondary, lineHeight: 18 },
+
+  // Address card
+  addrCard: {
+    backgroundColor: COLORS.gray50, borderRadius: 10, padding: 12,
+    gap: 3, borderWidth: 1, borderColor: COLORS.border, marginTop: 2,
+  },
+  addrCardLabel: { fontSize: 11, fontWeight: '700', color: COLORS.primary, marginBottom: 4 },
+  addrName: { fontSize: 13, fontWeight: '600', color: COLORS.text },
+  addrLine: { fontSize: 13, color: COLORS.textSecondary },
+  addrLandmark: { fontSize: 12, color: COLORS.gray400, fontStyle: 'italic' },
+
+  // Shipment card
+  shipCard: {
+    backgroundColor: COLORS.primaryLight, borderRadius: 10, padding: 12,
+    borderWidth: 1, borderColor: `${COLORS.primary}30`, marginTop: 2, gap: 4,
+  },
+  shipRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  shipLabel: { fontSize: 11, fontWeight: '700', color: COLORS.primary },
+  shipProvider: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  shipTracking: { fontSize: 12, color: COLORS.text, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
+  shipNotes: { fontSize: 12, color: COLORS.textSecondary, fontStyle: 'italic' },
+  shipViewChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 2,
+    backgroundColor: `${COLORS.primary}18`, borderRadius: 8,
+    paddingHorizontal: 7, paddingVertical: 3,
+  },
+  shipViewChipText: { fontSize: 10, fontWeight: '600', color: COLORS.primary },
+
+  // Shipment detail modal rows
+  shipDetailRow: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border,
+  },
+  shipDetailIcon: {
+    width: 34, height: 34, borderRadius: 10,
     backgroundColor: COLORS.primaryLight,
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 8,
-    gap: 3,
-    borderWidth: 1,
-    borderColor: `${COLORS.primary}30`,
+    alignItems: 'center', justifyContent: 'center',
   },
-  shipmentRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  shipmentLabel: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
-  shipmentProvider: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  shipmentTracking: { fontSize: 13, color: COLORS.text, fontFamily: 'monospace' },
-  shipmentMeta: { fontSize: 12, color: COLORS.textSecondary },
-  shipmentNotes: { fontSize: 12, color: COLORS.textSecondary, fontStyle: 'italic', marginTop: 2 },
-
-  noteText: { fontSize: 14, color: COLORS.textSecondary, lineHeight: 20 },
-
-  disputeBox: {
-    backgroundColor: '#FEF2F2',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    padding: 12,
-    gap: 6,
+  shipDetailMeta: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '500', marginBottom: 2 },
+  shipDetailVal: { fontSize: 14, fontWeight: '600', color: COLORS.text },
+  trackBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: COLORS.primary, borderRadius: 14,
+    paddingVertical: 14, marginTop: 8,
   },
-  disputeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  disputeTitle: { fontSize: 13, fontWeight: '700', color: '#991B1B' },
-  disputeReason: { fontSize: 12, color: '#DC2626', fontStyle: 'italic' },
-  disputeNote: { fontSize: 12, color: COLORS.textSecondary, lineHeight: 16 },
-
-  actions: { gap: 10, marginTop: 8, marginBottom: 40 },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+  trackBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  trackBtnDisabled: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: COLORS.gray50, borderRadius: 12, padding: 12,
+    borderWidth: 1, borderColor: COLORS.border, marginTop: 8,
   },
-  modal: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 20,
-    gap: 12,
-    maxHeight: '90%',
-  },
-  modalTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text },
-  modalSubtitle: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 18 },
+  trackBtnDisabledText: { fontSize: 12, color: COLORS.textSecondary, flex: 1, lineHeight: 18 },
 
+  // Dispute
+  disputeCard: {
+    backgroundColor: '#FEF2F2', borderRadius: 16, padding: 16,
+    borderWidth: 1, borderColor: '#FECACA', gap: 8,
+  },
+  disputeHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  disputeTitle: { fontSize: 14, fontWeight: '700', color: '#991B1B' },
+  disputeReason: { fontSize: 13, color: '#DC2626', fontStyle: 'italic', lineHeight: 18 },
+  disputeNote: { fontSize: 12, color: COLORS.textSecondary, lineHeight: 17 },
+
+  // Actions
+  actions: { gap: 10, marginBottom: 20 },
+  actionRow: { flexDirection: 'row', gap: 10 },
+  ghostBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 12, borderRadius: 12,
+  },
+  ghostBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.danger },
+
+  // Modal overlay + sheet
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: COLORS.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 24, gap: 12, maxHeight: '92%',
+  },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  sheetTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text },
+  sheetNote: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 18 },
+  sheetBtns: { flexDirection: 'row', gap: 10 },
+
+  // Forms
   fieldWrap: { gap: 6 },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
-  modalInput: {
-    backgroundColor: COLORS.gray50,
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 14,
-    color: COLORS.text,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-  },
-
-  stateDropdown: {
-    marginTop: 4,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    backgroundColor: COLORS.white,
-    overflow: 'hidden',
+  input: {
+    backgroundColor: COLORS.gray50, borderRadius: 12, padding: 14,
+    fontSize: 14, color: COLORS.text, borderWidth: 1.5, borderColor: COLORS.border,
   },
   pickerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.gray50,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: COLORS.gray50, borderRadius: 12, paddingHorizontal: 14,
+    paddingVertical: 13, borderWidth: 1.5, borderColor: COLORS.border,
   },
   pickerVal: { fontSize: 14, color: COLORS.text, flex: 1 },
-  pickerPlaceholder: { fontSize: 14, color: COLORS.textLight, flex: 1 },
-  pickerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+  pickerPlaceholder: { fontSize: 14, color: COLORS.gray300, flex: 1 },
+  dropdown: {
+    marginTop: 4, borderWidth: 1.5, borderColor: COLORS.border,
+    borderRadius: 12, backgroundColor: COLORS.white, overflow: 'hidden',
   },
-  pickerItemText: { fontSize: 15, color: COLORS.text },
+  dropdownItem: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 13, paddingHorizontal: 14,
+    borderBottomWidth: 1, borderBottomColor: COLORS.border,
+  },
+  dropdownItemText: { fontSize: 14, color: COLORS.text },
 
-  modalBtns: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  ratingRow: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginVertical: 8 },
+  charCount: { fontSize: 11, color: COLORS.gray400 },
+
+  // Dispute warn
+  disputeWarn: {
+    backgroundColor: '#FFFBEB', borderRadius: 12, padding: 12, gap: 6,
+    borderWidth: 1, borderColor: '#FDE68A',
+  },
+  disputeWarnRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  disputeWarnTitle: { fontSize: 12, fontWeight: '700', color: '#92400E' },
+  disputeWarnBody: { fontSize: 12, color: '#78350F', lineHeight: 18 },
+
+  // Review
+  reviewTarget: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.gray50, borderRadius: 16, padding: 14,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  reviewTargetName: { fontSize: 15, fontWeight: '700', color: COLORS.text },
+  reviewTargetRole: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+  reviewLabel: { fontSize: 13, color: COLORS.textSecondary, fontStyle: 'italic', marginTop: 4 },
 });

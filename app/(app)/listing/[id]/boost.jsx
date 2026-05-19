@@ -13,6 +13,7 @@ import { getMe } from '../../../../src/api/auth.api';
 import { useAuthStore } from '../../../../src/store/auth.store';
 import { COLORS, formatBC, resolveImageUrl, getListingPlaceholder } from '../../../../src/utils/currency';
 import Spinner from '../../../../src/components/ui/Spinner';
+import BackButton from '../../../../src/components/ui/BackButton';
 
 const AMBER       = '#F59E0B';
 const AMBER_LIGHT = '#FFFBEB';
@@ -86,9 +87,7 @@ export default function BoostScreen() {
 
       {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={20} color={COLORS.text} />
-        </TouchableOpacity>
+        <BackButton fallback="/" />
         <Text style={s.headerTitle}>Boost Listing</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -126,7 +125,7 @@ export default function BoostScreen() {
               Active until{' '}
               {new Date(listing.boostExpires).toLocaleDateString('en-NG', { day: 'numeric', month: 'long' })}.
             </Text>
-            <TouchableOpacity onPress={() => router.back()} style={s.viewListingBtn}>
+            <TouchableOpacity onPress={() => router.replace('/')} style={s.viewListingBtn}>
               <Text style={s.viewListingText}>View listing</Text>
             </TouchableOpacity>
           </View>

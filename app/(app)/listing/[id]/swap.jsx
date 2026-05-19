@@ -13,6 +13,7 @@ import { useAuthStore } from '../../../../src/store/auth.store';
 import { COLORS, formatBC, getListingPlaceholder } from '../../../../src/utils/currency';
 import Button from '../../../../src/components/ui/Button';
 import Spinner from '../../../../src/components/ui/Spinner';
+import BackButton from '../../../../src/components/ui/BackButton';
 
 const ESCROW_PERCENTS = [10, 25, 50, 100];
 
@@ -102,9 +103,7 @@ export default function SwapProposalScreen() {
     <View style={styles.screen}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.text} />
-        </TouchableOpacity>
+        <BackButton fallback="/" />
         <Text style={styles.headerTitle}>Propose Swap</Text>
         <View style={{ width: 40 }} />
       </View>

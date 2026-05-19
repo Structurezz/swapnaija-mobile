@@ -14,6 +14,7 @@ import { getSocket } from '../../../src/hooks/useSocket';
 import { COLORS } from '../../../src/utils/currency';
 import Avatar from '../../../src/components/ui/Avatar';
 import Spinner from '../../../src/components/ui/Spinner';
+import BackButton from '../../../src/components/ui/BackButton';
 
 function TypingDots() {
   const anim = useRef(new Animated.Value(0)).current;
@@ -212,9 +213,7 @@ export default function ChatThreadScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.text} />
-        </TouchableOpacity>
+        <BackButton fallback="/chat" />
         <Avatar uri={other?.avatarUrl} name={otherName} size={36} />
         <View style={styles.headerInfo}>
           <Text style={styles.headerName}>{otherName}</Text>

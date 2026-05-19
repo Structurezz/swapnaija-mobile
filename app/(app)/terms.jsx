@@ -6,6 +6,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../src/utils/currency';
+import BackButton from '../../src/components/ui/BackButton';
 
 // ── Terms content ─────────────────────────────────────────────────────────────
 const TERMS_SECTIONS = [
@@ -94,9 +95,7 @@ export default function TermsScreen() {
 
       {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={20} color={COLORS.text} />
-        </TouchableOpacity>
+        <BackButton fallback="/profile" />
         <Text style={s.headerTitle}>Terms of Service</Text>
         <View style={{ width: 40 }} />
       </View>

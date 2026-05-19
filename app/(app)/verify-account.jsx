@@ -8,6 +8,7 @@ import { initiateVerify } from '../../src/api/payments.api';
 import { useAuthStore } from '../../src/store/auth.store';
 import { COLORS, formatBC } from '../../src/utils/currency';
 import Button from '../../src/components/ui/Button';
+import BackButton from '../../src/components/ui/BackButton';
 
 const BENEFITS = [
   { icon: 'checkmark-shield', text: 'Verified badge on your profile' },
@@ -63,9 +64,7 @@ export default function VerifyAccountScreen() {
   if (user?.verification === 'verified') {
     return (
       <View style={styles.screen}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.text} />
-        </TouchableOpacity>
+        <BackButton fallback="/profile" style={styles.backBtn} />
         <View style={styles.alreadyVerified}>
           <View style={styles.verifiedIcon}>
             <Ionicons name="checkmark-circle" size={60} color={COLORS.primary} />
@@ -80,9 +79,7 @@ export default function VerifyAccountScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtnRow}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.text} />
-        </TouchableOpacity>
+        <BackButton fallback="/profile" />
         <Text style={styles.headerTitle}>Verify Account</Text>
         <View style={{ width: 40 }} />
       </View>

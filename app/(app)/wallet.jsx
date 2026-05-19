@@ -15,6 +15,7 @@ import { getMe } from '../../src/api/auth.api';
 import { useAuthStore } from '../../src/store/auth.store';
 import { formatBC, resolveImageUrl, COLORS } from '../../src/utils/currency';
 import Spinner from '../../src/components/ui/Spinner';
+import BackButton from '../../src/components/ui/BackButton';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const W = {
@@ -544,9 +545,7 @@ export default function WalletScreen() {
 
       {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={20} color={W.text} />
-        </TouchableOpacity>
+        <BackButton fallback="/profile" style={s.headerBtn} />
         <Text style={s.headerTitle}>My Wallet</Text>
         <TouchableOpacity style={s.headerBtn} onPress={() => refetch()} activeOpacity={0.7}>
           <Ionicons name="refresh-outline" size={20} color={W.textSub} />

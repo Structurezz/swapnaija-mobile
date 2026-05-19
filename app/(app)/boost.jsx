@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getMyListings } from '../../src/api/listings.api';
 import { COLORS, resolveImageUrl, getListingPlaceholder } from '../../src/utils/currency';
 import Spinner from '../../src/components/ui/Spinner';
+import BackButton from '../../src/components/ui/BackButton';
 
 const AMBER  = '#F59E0B';
 const ORANGE = '#EA580C';
@@ -44,9 +45,7 @@ export default function BoostSelectScreen() {
 
         {/* Nav */}
         <View style={s.heroNav}>
-          <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-            <Ionicons name="arrow-back" size={20} color="#fff" />
-          </TouchableOpacity>
+          <BackButton dark fallback="/" />
           <Text style={s.heroNavTitle}>Boost a Listing</Text>
           <View style={{ width: 40 }} />
         </View>

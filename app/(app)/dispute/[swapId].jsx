@@ -17,6 +17,7 @@ import { BASE_URL } from '../../../src/api/client';
 import { useAuthStore } from '../../../src/store/auth.store';
 import { getSocket } from '../../../src/hooks/useSocket';
 import { formatBC } from '../../../src/utils/currency';
+import BackButton from '../../../src/components/ui/BackButton';
 
 // ── Nigerian Court Palette ────────────────────────────────────────────────────
 const C = {
@@ -758,9 +759,7 @@ export default function DisputeRoomScreen() {
     return (
       <View style={s.screen}>
         <View style={s.header}>
-          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-            <Ionicons name="arrow-back" size={20} color={C.green400} />
-          </TouchableOpacity>
+          <BackButton fallback="/swaps" color={C.green400} />
           <Text style={s.headerTitle}>Dispute Court</Text>
         </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 20 }}>
@@ -777,9 +776,7 @@ export default function DisputeRoomScreen() {
     return (
       <View style={s.screen}>
         <View style={s.header}>
-          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-            <Ionicons name="arrow-back" size={20} color={C.green400} />
-          </TouchableOpacity>
+          <BackButton fallback="/swaps" color={C.green400} />
           <Text style={s.headerTitle}>Dispute Court</Text>
         </View>
         <View style={s.errorState}>
@@ -792,9 +789,7 @@ export default function DisputeRoomScreen() {
               <Text style={s.retryText}>Retry</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={s.backLink}>← Back to My Swaps</Text>
-          </TouchableOpacity>
+          <BackButton fallback="/swaps" color={C.green400} />
         </View>
       </View>
     );
@@ -806,9 +801,7 @@ export default function DisputeRoomScreen() {
 
       {/* ── Header ── */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-          <Ionicons name="arrow-back" size={20} color={C.green400} />
-        </TouchableOpacity>
+        <BackButton fallback="/swaps" color={C.green400} />
         <CourtSeal size={38} />
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -953,9 +946,7 @@ export default function DisputeRoomScreen() {
           <Text style={s.closedText}>
             {room.status === 'resolved' ? 'Ruling issued — proceedings closed' : 'Proceedings closed'}
           </Text>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={s.closedLink}>← My Swaps</Text>
-          </TouchableOpacity>
+          <BackButton fallback="/swaps" color={C.green400} />
         </View>
       )}
 

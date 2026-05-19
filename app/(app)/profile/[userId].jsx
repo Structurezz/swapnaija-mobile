@@ -20,6 +20,7 @@ import ReviewStars from '../../../src/components/ui/ReviewStars';
 import ListingCard from '../../../src/components/ui/ListingCard';
 import Button from '../../../src/components/ui/Button';
 import Spinner from '../../../src/components/ui/Spinner';
+import BackButton from '../../../src/components/ui/BackButton';
 import { format } from 'date-fns';
 
 export default function PublicProfileScreen() {
@@ -40,9 +41,11 @@ export default function PublicProfileScreen() {
 
   const handleBack = () => {
     if (fromListingId) {
-      router.navigate(`/listing/${fromListingId}`);
-    } else {
+      router.replace(`/listing/${fromListingId}`);
+    } else if (router.canGoBack()) {
       router.back();
+    } else {
+      router.replace('/');
     }
   };
 
@@ -78,7 +81,7 @@ export default function PublicProfileScreen() {
   return (
     <ScrollView style={styles.screen} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
+        <TouchableOpacity style={styles.backBtn} onPress={handleBack} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>

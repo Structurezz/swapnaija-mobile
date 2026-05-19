@@ -11,6 +11,7 @@ import * as ImagePicker from 'expo-image-picker';
 import Toast from 'react-native-toast-message';
 import { createListing, uploadListingImages, getCategories } from '../../src/api/listings.api';
 import { COLORS, CONDITIONS } from '../../src/utils/currency';
+import BackButton from '../../src/components/ui/BackButton';
 
 const CONDITION_MAP = { 'New': 'new', 'Like New': 'like_new', 'Good': 'good', 'Fair': 'fair', 'Poor': 'poor' };
 import Button from '../../src/components/ui/Button';
@@ -118,9 +119,7 @@ export default function CreateListingScreen() {
       <View style={styles.screen}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={COLORS.text} />
-          </TouchableOpacity>
+          <BackButton fallback="/" />
           <Text style={styles.headerTitle}>New Listing</Text>
           <View style={{ width: 40 }} />
         </View>

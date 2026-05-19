@@ -7,6 +7,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useAuthStore } from '../../src/store/auth.store';
 import { COLORS } from '../../src/utils/currency';
 import Button from '../../src/components/ui/Button';
+import BackButton from '../../src/components/ui/BackButton';
 
 const HOW_IT_WORKS = [
   { step: '1', title: 'Share your link', desc: 'Send your unique referral link to friends and family.' },
@@ -40,9 +41,7 @@ export default function InviteScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.text} />
-        </TouchableOpacity>
+        <BackButton fallback="/profile" />
         <Text style={styles.headerTitle}>Invite Friends</Text>
         <View style={{ width: 40 }} />
       </View>

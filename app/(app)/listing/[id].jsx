@@ -18,6 +18,7 @@ import Avatar from '../../../src/components/ui/Avatar';
 import Badge from '../../../src/components/ui/Badge';
 import ReviewStars from '../../../src/components/ui/ReviewStars';
 import Spinner from '../../../src/components/ui/Spinner';
+import BackButton from '../../../src/components/ui/BackButton';
 
 const { width } = Dimensions.get('window');
 
@@ -75,9 +76,7 @@ export default function ListingDetailScreen() {
   return (
     <View style={styles.screen}>
       {/* Back button */}
-      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-        <Ionicons name="arrow-back" size={22} color={COLORS.white} />
-      </TouchableOpacity>
+      <BackButton fallback="/" style={styles.backBtn} />
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Image carousel */}
