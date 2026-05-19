@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "SwapNaija",
+    "slug": "swapnaija",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "swapnaija",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1D9E75"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.structurezz.swapnaija"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1D9E75"
+      },
+      "package": "com.structurezz.swapnaija"
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow SwapNaija to access your photos to upload listing images."
+        }
+      ],
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
