@@ -12,7 +12,7 @@ import BackButton from '../../src/components/ui/BackButton';
 const HOW_IT_WORKS = [
   { step: '1', title: 'Share your link', desc: 'Send your unique referral link to friends and family.' },
   { step: '2', title: 'They sign up', desc: 'Your friend registers using your referral link.' },
-  { step: '3', title: 'You both earn', desc: 'When they complete their first swap, you both get 200 BC credits!' },
+  { step: '3', title: 'You both earn', desc: 'When they complete their first swap, you both get 200 BC!' },
 ];
 
 export default function InviteScreen() {
@@ -55,7 +55,7 @@ export default function InviteScreen() {
           <Text style={styles.heroTitle}>Invite & Earn</Text>
           <Text style={styles.heroSub}>
             Invite friends to SwapNaija and earn{' '}
-            <Text style={styles.highlight}>200 BC credits</Text>
+            <Text style={styles.highlight}>200 <Text style={styles.bcSmall}>BC</Text></Text>
             {' '}for each successful referral!
           </Text>
         </View>
@@ -87,7 +87,7 @@ export default function InviteScreen() {
           <View style={styles.statDivider} />
           <View style={styles.stat}>
             <Text style={styles.statVal}>{(user?.referralCount ?? 0) * 200}</Text>
-            <Text style={styles.statLabel}>BC Earned</Text>
+            <Text style={styles.statLabel}>BC earned</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.stat}>
@@ -174,6 +174,7 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 26, fontWeight: '800', color: COLORS.text },
   heroSub: { fontSize: 15, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 22 },
   highlight: { color: COLORS.primary, fontWeight: '700' },
+  bcSmall: { fontSize: 11, fontWeight: '600' },
 
   codeCard: {
     backgroundColor: COLORS.white,
