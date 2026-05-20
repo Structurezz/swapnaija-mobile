@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/auth.store';
 import { useChatStore } from '../../src/store/chat.store';
@@ -31,6 +32,7 @@ export default function AppLayout() {
   const { isAuthenticated, initialized } = useAuthStore();
   const router = useRouter();
   const totalUnread = useChatStore((s) => s.getTotalUnread());
+  const { bottom: bottomInset } = useSafeAreaInsets();
 
   useEffect(() => {
     if (initialized && !isAuthenticated()) {
@@ -47,7 +49,7 @@ export default function AppLayout() {
           headerShown: false,
           tabBarActiveTintColor: COLORS.primary,
           tabBarInactiveTintColor: COLORS.gray400,
-          tabBarStyle: styles.tabBar,
+          tabBarStyle: [styles.tabBar, { paddingBottom: 10 + bottomInset, height: 72 + bottomInset }],
           tabBarLabelStyle: styles.tabLabel,
           tabBarIconStyle: { marginTop: 2 },
         }}
