@@ -1,4 +1,4 @@
-const API_ORIGIN = 'https://swapnigeria-production.up.railway.app';
+const API_ORIGIN = 'https://swap-naija-production.up.railway.app';
 
 export function resolveImageUrl(url) {
   if (!url) return null;

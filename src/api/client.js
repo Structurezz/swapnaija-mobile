@@ -1,7 +1,7 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-const PROD_URL = 'https://swapnigeria-production.up.railway.app/api';
+const PROD_URL = 'https://swap-naija-production.up.railway.app/api';
 
 // Always use production — all data lives there.
 // Override with EXPO_PUBLIC_API_URL for local backend testing.
